@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -23,30 +24,22 @@ Generates a MinIO access key and secret. You can redirect the output into an .en
 )
 
 func main() {
-
 	flag.Usage = usage
 	flag.Parse()
-	var (
-		rawKey    = make([]byte, keyLen)
-		rawSecret = make([]byte, secretLen)
-		err       error
-	)
-	_, err = rand.Read(rawKey)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = rand.Read(rawSecret)
-	if err != nil {
-		panic(err)
-	}
-
 	enc := base64.URLEncoding.WithPadding(pad)
+	accessKey, err := generateKey(enc, keyLen, true)
+	if err != nil {
+		exitWithError("failed to generate access key", err)
+	}
+	secretKey, err := generateKey(enc, secretLen, false)
+	if err != nil {
+		exitWithError("failed to generate secret key", err)
+	}
 
 	fmt.Printf(
 		"MINIO_ACCESS_KEY=%s\nMINIO_SECRET_KEY=%s\n",
-		strings.ToUpper(enc.EncodeToString(rawKey)),
-		enc.EncodeToString(rawSecret),
+		accessKey,
+		secretKey,
 	)
 }
 
@@ -59,4 +52,24 @@ func usage() {
 		ver = info.Main.Version
 	}
 	fmt.Printf(about, ver, runtime.Version())
+}
+
+func generateKey(encoder *base64.Encoding, length int, upper bool) (string, error) {
+	data := make([]byte, length)
+	if _, err := rand.Read(data); err != nil {
+		return "", err
+	}
+
+	encoded := encoder.EncodeToString(data)
+	if upper {
+		encoded = strings.ToUpper(encoded)
+	}
+
+	return encoded, nil
+}
+
+func exitWithError(message string, err error) {
+	fmt.Fprintf(os.Stderr, "%s: %v\n", message, err)
+	flag.Usage()
+	os.Exit(1)
 }
